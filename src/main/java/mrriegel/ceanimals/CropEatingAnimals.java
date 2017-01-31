@@ -45,13 +45,13 @@ public class CropEatingAnimals {
 	@Instance(CropEatingAnimals.MODID)
 	public static CropEatingAnimals INSTANCE;
 
-	public static final String VERSION = "1.2.0";
+	public static final String VERSION = "1.3.0";
 	public static final String NAME = "Crop-Eating Animals";
 	public static final String MODID = "ceanimals";
 
 	//config
 	public static Configuration config;
-	public static boolean forceHarvest, removeDrops, cheatSeed, insertInventory;
+	public static boolean forceHarvest, removeDrops, cheatSeed, insertInventory, spreadCrops;
 	public static int maxAnimals;
 	public static List<String> blackList, whiteList;
 
@@ -60,11 +60,12 @@ public class CropEatingAnimals {
 		config = new Configuration(event.getSuggestedConfigurationFile());
 		forceHarvest = config.getBoolean("forceHarvest", Configuration.CATEGORY_GENERAL, false, "Animals will harvest crops even if they won't eat them.");
 		removeDrops = config.getBoolean("removeDrops", Configuration.CATEGORY_GENERAL, false, "Remaining drops will disappear instead of lying around.");
-		cheatSeed = config.getBoolean("cheatSeed", Configuration.CATEGORY_GENERAL, true, "Sometimes a crop won't drop a seed to replant itself. If enabled it will replant itself anyway.");
+		cheatSeed = config.getBoolean("cheatSeed", Configuration.CATEGORY_GENERAL, false, "Sometimes a crop won't drop a seed to replant itself. If enabled it will replant itself anyway.");
 		insertInventory = config.getBoolean("insertInventory", Configuration.CATEGORY_GENERAL, true, "Remaining drops will be inserted into inventories next to the farm.");
 		maxAnimals = config.getInt("maxAnimals", Configuration.CATEGORY_GENERAL, 6, -1, 30, "Determines the number of equal animals that can be around an animal (5 blocks range) before they stop breeding." + Configuration.NEW_LINE + "-1 means no limit.");
 		blackList = Lists.newArrayList(config.getStringList("blackList", "List", new String[] { "Bat", "Slime", "PigZombie" }, "List for animals that won't breed automatically."));
 		whiteList = Lists.newArrayList(config.getStringList("whiteList", "List", new String[] {}, "List for animals that will breed automatically."));
+		spreadCrops = config.getBoolean("spreadCrops", Configuration.CATEGORY_GENERAL, true, "Animals will spread crops to attached farmlands.");
 		if (!blackList.isEmpty() && !whiteList.isEmpty())
 			throw new IllegalStateException("At least one of the lists have to be empty.");
 		if (config.hasChanged())
@@ -92,21 +93,43 @@ public class CropEatingAnimals {
 				}
 				if (food != null)
 					ani.setInLove(null);
+				else
+					moveToNextCrop(ani);
 				handleRemainingDrops(lis, ani.worldObj, current);
 			} else if (CropEatingAnimals.forceHarvest && isMatureCrop(ani.worldObj, current) && !ani.isInLove()) {
 				List<ItemStack> lis = breakAndReplant(ani.worldObj, current);
 				handleRemainingDrops(lis, ani.worldObj, current);
 				Random ran = new Random();
-				BlockPos p = current.offset(EnumFacing.VALUES[ran.nextInt(6)], ran.nextInt(2) + 1);
-				if (ran.nextBoolean())
+				if (ran.nextBoolean()) {
+					BlockPos p = current.offset(EnumFacing.VALUES[ran.nextInt(6)], ran.nextInt(2) + 1);
 					ani.getNavigator().tryMoveToXYZ(p.getX(), p.getY(), p.getZ(), 1.2);
-				//				moveToNextCrop(ani);
+				}
 			}
 		}
 	}
 
 	private static void handleRemainingDrops(List<ItemStack> lis, World world, BlockPos pos) {
 		if (!CropEatingAnimals.removeDrops) {
+			if (CropEatingAnimals.spreadCrops) {
+				List<EnumFacing> faces = Lists.newArrayList(EnumFacing.HORIZONTALS);
+				Collections.shuffle(faces);
+				for (EnumFacing face : faces) {
+					BlockPos neighbor = pos.offset(face);
+					if (!world.isAirBlock(neighbor))
+						continue;
+					Iterator<ItemStack> it = lis.iterator();
+					while (it.hasNext()) {
+						ItemStack k = it.next();
+						if (k.getItem() instanceof IPlantable) {
+							IPlantable plant = (IPlantable) k.getItem();
+							if (world.getBlockState(neighbor.down()).getBlock().canSustainPlant(world.getBlockState(neighbor.down()), world, neighbor.down(), EnumFacing.UP, plant)) {
+								world.setBlockState(neighbor, plant.getPlant(world, pos));
+								it.remove();
+							}
+						}
+					}
+				}
+			}
 			if (CropEatingAnimals.insertInventory) {
 				LinkedList<BlockPos> research = Lists.newLinkedList(Collections.singleton(pos));
 				Set<BlockPos> done = Sets.newHashSet();
@@ -135,24 +158,20 @@ public class CropEatingAnimals {
 						if (s == null)
 							continue;
 						ItemStack rem = ItemHandlerHelper.insertItemStacked(handler, s, false);
-						//						if (rem == null || rem.stackSize != s.stackSize) {
-						//							world.playEvent(2005, invs.get(handler).up(), 1);
-						//						}
 						lis.set(i, rem);
 					}
-				for (ItemStack s : lis)
-					if (s != null)
-						Block.spawnAsEntity(world, pos, s);
-			} else
-				for (ItemStack s : lis)
-					Block.spawnAsEntity(world, pos, s);
+				lis.removeAll(Collections.singleton(null));
+			}
+
+			for (ItemStack s : lis)
+				Block.spawnAsEntity(world, pos, s);
 		}
 	}
 
 	private static List<ItemStack> breakAndReplant(World world, BlockPos pos) {
 		IBlockState state = world.getBlockState(pos);
 		BlockCrops crop = (BlockCrops) state.getBlock();
-		List<ItemStack> drops = Lists.newArrayList(crop.getDrops(world, pos, state, 0));
+		List<ItemStack> drops = Lists.newLinkedList(crop.getDrops(world, pos, state, 0));
 		drops.removeAll(Collections.singleton(null));
 		IBlockState neww = CropEatingAnimals.cheatSeed ? state.getBlock().getDefaultState() : Blocks.AIR.getDefaultState();
 		Iterator<ItemStack> it = drops.iterator();
@@ -221,7 +240,7 @@ public class CropEatingAnimals {
 	private static boolean nearPartner(EntityAnimal ani, BlockPos crop) {
 		return ani.worldObj.getEntitiesWithinAABB(ani.getClass(), new AxisAlignedBB(crop).expandXyz(8.0D)).//
 				stream().//
-				anyMatch(ea -> ea.getClass() == ani.getClass() && ea != ani && ani.getNavigator().getPathToEntityLiving(ea) != null && (ea.getGrowingAge() == 0 || ea.isInLove()));
+				anyMatch(ea -> !ea.isDead && ea.getClass() == ani.getClass() && ea != ani && ani.getNavigator().getPathToEntityLiving(ea) != null && (ea.getGrowingAge() == 0 || ea.isInLove()));
 	}
 
 	private static boolean validCrop(EntityAnimal ani, BlockPos pos) {
@@ -237,7 +256,7 @@ public class CropEatingAnimals {
 	}
 
 	private static boolean validLove(EntityAnimal ani) {
-		return animalAllowed(ani) && ani.getGrowingAge() == 0 && !ani.isInLove() && (CropEatingAnimals.maxAnimals < 0 || nearSiblings(ani, 5.5) <= CropEatingAnimals.maxAnimals);
+		return !ani.isDead && animalAllowed(ani) && ani.getGrowingAge() == 0 && !ani.isInLove() && (CropEatingAnimals.maxAnimals < 0 || nearSiblings(ani, 5.5) <= CropEatingAnimals.maxAnimals);
 	}
 
 	private static boolean animalAllowed(EntityAnimal ani) {
