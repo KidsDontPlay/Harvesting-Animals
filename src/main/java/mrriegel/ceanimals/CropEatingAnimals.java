@@ -47,7 +47,7 @@ public class CropEatingAnimals {
 	@Instance(CropEatingAnimals.MODID)
 	public static CropEatingAnimals INSTANCE;
 
-	public static final String VERSION = "1.3.0";
+	public static final String VERSION = "1.3.1";
 	public static final String NAME = "Crop-Eating Animals";
 	public static final String MODID = "ceanimals";
 
@@ -65,9 +65,7 @@ public class CropEatingAnimals {
 		cheatSeed = config.getBoolean("cheatSeed", Configuration.CATEGORY_GENERAL, false, "Sometimes a crop won't drop a seed to replant itself. If enabled it will replant itself anyway.");
 		insertInventory = config.getBoolean("insertInventory", Configuration.CATEGORY_GENERAL, true, "Remaining drops will be inserted into inventories next to the farm.");
 		maxAnimals = config.getInt("maxAnimals", Configuration.CATEGORY_GENERAL, 6, -1, 30, "Determines the number of equal animals that can be around an animal (5 blocks range) before they stop breeding." + Configuration.NEW_LINE + "-1 means no limit.");
-		Function<String, ResourceLocation> f = s -> {
-			return new ResourceLocation(s);
-		};
+		Function<String, ResourceLocation> f = s -> new ResourceLocation(s);
 		blackList = Lists.newArrayList(config.getStringList("blackList", "List", new String[] { "bat", "slime", "zombie_pigman" }, "List for animals that won't breed automatically.")).stream().map(f).collect(Collectors.toList());
 		whiteList = Lists.newArrayList(config.getStringList("whiteList", "List", new String[] {}, "List for animals that will breed automatically.")).stream().map(f).collect(Collectors.toList());
 		spreadCrops = config.getBoolean("spreadCrops", Configuration.CATEGORY_GENERAL, true, "Animals will spread crops to attached farmlands.");
@@ -185,7 +183,7 @@ public class CropEatingAnimals {
 			ItemStack s = it.next();
 			if (s.getItem() instanceof IPlantable) {
 				IPlantable plant = (IPlantable) s.getItem();
-				if (/*plant.getPlantType(world, pos) == EnumPlantType.Crop && */plant.getPlant(world, pos).getBlock() == crop) {
+				if (/*plant.getPlantType(world, pos) == EnumPlantType.Crop && */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
 					neww = plant.getPlant(world, pos);
 					it.remove();
 					changed = true;
