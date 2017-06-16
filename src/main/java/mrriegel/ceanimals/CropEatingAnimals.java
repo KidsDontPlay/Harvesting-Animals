@@ -10,6 +10,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockCrops;
 import net.minecraft.block.state.IBlockState;
@@ -36,10 +40,6 @@ import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-
 @Mod(modid = CropEatingAnimals.MODID, name = CropEatingAnimals.NAME, version = CropEatingAnimals.VERSION, acceptableRemoteVersions = "*")
 @EventBusSubscriber
 public class CropEatingAnimals {
@@ -47,11 +47,11 @@ public class CropEatingAnimals {
 	@Instance(CropEatingAnimals.MODID)
 	public static CropEatingAnimals INSTANCE;
 
-	public static final String VERSION = "1.3.1";
+	public static final String VERSION = "1.4.0";
 	public static final String NAME = "Crop-Eating Animals";
 	public static final String MODID = "ceanimals";
 
-	//config
+	// config
 	public static Configuration config;
 	public static boolean forceHarvest, removeDrops, cheatSeed, insertInventory, spreadCrops;
 	public static int maxAnimals;
@@ -77,7 +77,7 @@ public class CropEatingAnimals {
 
 	@SubscribeEvent
 	public static void eat(LivingUpdateEvent event) {
-		if (event.getEntityLiving() instanceof EntityAnimal && !event.getEntityLiving().world.isRemote && event.getEntityLiving().ticksExisted % (15) == 0) {
+		if (event.getEntityLiving() instanceof EntityAnimal && !event.getEntityLiving().world.isRemote && event.getEntityLiving().ticksExisted % 15 == 0) {
 			EntityAnimal ani = (EntityAnimal) event.getEntityLiving();
 			BlockPos current = new BlockPos(ani);
 			if (Math.abs(ani.posY - MathHelper.floor(ani.posY)) > .5)
@@ -163,7 +163,6 @@ public class CropEatingAnimals {
 						ItemStack rem = ItemHandlerHelper.insertItemStacked(handler, s, false);
 						lis.set(i, rem);
 					}
-				lis.removeAll(Collections.singleton(null));
 			}
 
 			for (ItemStack s : lis)
@@ -175,7 +174,6 @@ public class CropEatingAnimals {
 		IBlockState state = world.getBlockState(pos);
 		BlockCrops crop = (BlockCrops) state.getBlock();
 		List<ItemStack> drops = Lists.newLinkedList(crop.getDrops(world, pos, state, 0));
-		drops.removeAll(Collections.singleton(null));
 		IBlockState neww = CropEatingAnimals.cheatSeed ? state.getBlock().getDefaultState() : Blocks.AIR.getDefaultState();
 		Iterator<ItemStack> it = drops.iterator();
 		boolean changed = false;
@@ -183,7 +181,9 @@ public class CropEatingAnimals {
 			ItemStack s = it.next();
 			if (s.getItem() instanceof IPlantable) {
 				IPlantable plant = (IPlantable) s.getItem();
-				if (/*plant.getPlantType(world, pos) == EnumPlantType.Crop && */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
+				if (/*
+					 * plant.getPlantType(world, pos) == EnumPlantType.Crop &&
+					 */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
 					neww = plant.getPlant(world, pos);
 					it.remove();
 					changed = true;
@@ -211,7 +211,7 @@ public class CropEatingAnimals {
 				stream().//
 				filter(p -> validCrop(ani, p) && validLove(ani)).//
 				collect(Collectors.toList());
-		posList.sort((pos1, pos2) -> Double.compare(pos1.distanceSq(entPos), pos2.distanceSq(entPos)));
+		posList.sort((pos1, pos2) -> Double.compare(pos2.distanceSq(entPos), pos1.distanceSq(entPos)));
 		boolean walk = false;
 		for (BlockPos p : posList) {
 			if (ani.getNavigator().getPathToPos(p) == null || !nearPartner(ani, p))
@@ -234,14 +234,14 @@ public class CropEatingAnimals {
 	}
 
 	private static int nearSiblings(EntityAnimal ani, double range) {
-		return ani.world.getEntitiesWithinAABB(ani.getClass(), new AxisAlignedBB(new BlockPos(ani)).expandXyz(range)).//
+		return ani.world.getEntitiesWithinAABB(ani.getClass(), new AxisAlignedBB(new BlockPos(ani)).grow(range)).//
 				stream().//
 				filter(ea -> ea.getClass() == ani.getClass() && ea != ani && !ea.isChild()).//
 				collect(Collectors.toList()).size();
 	}
 
 	private static boolean nearPartner(EntityAnimal ani, BlockPos crop) {
-		return ani.world.getEntitiesWithinAABB(ani.getClass(), new AxisAlignedBB(crop).expandXyz(8.0D)).//
+		return ani.world.getEntitiesWithinAABB(ani.getClass(), new AxisAlignedBB(crop).grow(8.0D)).//
 				stream().//
 				anyMatch(ea -> !ea.isDead && ea.getClass() == ani.getClass() && ea != ani && ani.getNavigator().getPathToEntityLiving(ea) != null && (ea.getGrowingAge() == 0 || ea.isInLove()));
 	}
