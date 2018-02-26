@@ -47,13 +47,13 @@ public class CropEatingAnimals {
 	@Instance(CropEatingAnimals.MODID)
 	public static CropEatingAnimals INSTANCE;
 
-	public static final String VERSION = "1.4.0";
+	public static final String VERSION = "1.4.1";
 	public static final String NAME = "Crop-Eating Animals";
 	public static final String MODID = "ceanimals";
 
 	// config
 	public static Configuration config;
-	public static boolean forceHarvest, removeDrops, cheatSeed, insertInventory, spreadCrops;
+	public static boolean forceHarvest, removeDrops, cheatSeed, insertInventory, spreadCrops, noReplant;
 	public static int maxAnimals;
 	public static List<ResourceLocation> blackList, whiteList;
 
@@ -64,11 +64,12 @@ public class CropEatingAnimals {
 		removeDrops = config.getBoolean("removeDrops", Configuration.CATEGORY_GENERAL, false, "Remaining drops will disappear instead of lying around.");
 		cheatSeed = config.getBoolean("cheatSeed", Configuration.CATEGORY_GENERAL, false, "Sometimes a crop won't drop a seed to replant itself. If enabled it will replant itself anyway.");
 		insertInventory = config.getBoolean("insertInventory", Configuration.CATEGORY_GENERAL, true, "Remaining drops will be inserted into inventories next to the farm.");
+		spreadCrops = config.getBoolean("spreadCrops", Configuration.CATEGORY_GENERAL, true, "Animals will spread crops to attached farmlands.");
+		noReplant = config.getBoolean("noReplant", Configuration.CATEGORY_GENERAL, false, "Seed won't be replanted automatically.");
 		maxAnimals = config.getInt("maxAnimals", Configuration.CATEGORY_GENERAL, 6, -1, 30, "Determines the number of equal animals that can be around an animal (5 blocks range) before they stop breeding." + Configuration.NEW_LINE + "-1 means no limit.");
 		Function<String, ResourceLocation> f = s -> new ResourceLocation(s);
 		blackList = Lists.newArrayList(config.getStringList("blackList", "List", new String[] { "bat", "slime", "zombie_pigman" }, "List for animals that won't breed automatically.")).stream().map(f).collect(Collectors.toList());
 		whiteList = Lists.newArrayList(config.getStringList("whiteList", "List", new String[] {}, "List for animals that will breed automatically.")).stream().map(f).collect(Collectors.toList());
-		spreadCrops = config.getBoolean("spreadCrops", Configuration.CATEGORY_GENERAL, true, "Animals will spread crops to attached farmlands.");
 		if (!blackList.isEmpty() && !whiteList.isEmpty())
 			throw new IllegalStateException("At least one of the lists have to be empty.");
 		if (config.hasChanged())
@@ -174,26 +175,30 @@ public class CropEatingAnimals {
 		IBlockState state = world.getBlockState(pos);
 		BlockCrops crop = (BlockCrops) state.getBlock();
 		List<ItemStack> drops = Lists.newLinkedList(crop.getDrops(world, pos, state, 0));
-		IBlockState neww = CropEatingAnimals.cheatSeed ? state.getBlock().getDefaultState() : Blocks.AIR.getDefaultState();
-		Iterator<ItemStack> it = drops.iterator();
-		boolean changed = false;
-		while (it.hasNext()) {
-			ItemStack s = it.next();
-			if (s.getItem() instanceof IPlantable) {
-				IPlantable plant = (IPlantable) s.getItem();
-				if (/*
-					 * plant.getPlantType(world, pos) == EnumPlantType.Crop &&
-					 */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
-					neww = plant.getPlant(world, pos);
-					it.remove();
-					changed = true;
-					break;
+		if (CropEatingAnimals.noReplant) {
+			world.destroyBlock(pos, false);
+		} else {
+			IBlockState neww = CropEatingAnimals.cheatSeed ? state.getBlock().getDefaultState() : Blocks.AIR.getDefaultState();
+			Iterator<ItemStack> it = drops.iterator();
+			boolean changed = false;
+			while (it.hasNext()) {
+				ItemStack s = it.next();
+				if (s.getItem() instanceof IPlantable) {
+					IPlantable plant = (IPlantable) s.getItem();
+					if (/*
+						 * plant.getPlantType(world, pos) == EnumPlantType.Crop &&
+						 */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
+						neww = plant.getPlant(world, pos);
+						it.remove();
+						changed = true;
+						break;
+					}
 				}
 			}
+			if (CropEatingAnimals.cheatSeed && !changed && !drops.isEmpty())
+				drops.remove(0);
+			world.setBlockState(pos, neww);
 		}
-		if (CropEatingAnimals.cheatSeed && !changed && !drops.isEmpty())
-			drops.remove(0);
-		world.setBlockState(pos, neww);
 		return drops;
 	}
 
