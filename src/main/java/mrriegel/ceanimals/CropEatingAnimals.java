@@ -185,9 +185,8 @@ public class CropEatingAnimals {
 				ItemStack s = it.next();
 				if (s.getItem() instanceof IPlantable) {
 					IPlantable plant = (IPlantable) s.getItem();
-					if (/*
-						 * plant.getPlantType(world, pos) == EnumPlantType.Crop &&
-						 */plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
+					if ( //plant.getPlantType(world, pos) == EnumPlantType.Crop &&
+					plant.getPlant(world, pos) != null && plant.getPlant(world, pos).getBlock() == crop) {
 						neww = plant.getPlant(world, pos);
 						it.remove();
 						changed = true;
